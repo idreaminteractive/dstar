@@ -30,6 +30,9 @@ defmodule Dstar.Router do
   with the given module allowlist. That allowlist selects handler
   modules; the handler must still authorize the current user before
   `Dstar.start/1` if it needs a normal 401/403.
+
+  `dlive/2` wires a `Dstar.LivePage` module: GET render, POST stream loop,
+  POST events that forward to the loop and answer 204.
   """
 
   @doc """
@@ -48,6 +51,32 @@ defmodule Dstar.Router do
       get(path, Dstar.Page.Plug, {:page, page}, alias: false)
       post(path, Dstar.Page.Plug, {:stream, page}, alias: false)
       post(Dstar.Router.__event_path__(path), Dstar.Page.Plug, {:event, page}, alias: false)
+    end
+  end
+
+  @doc """
+  Wires a `Dstar.LivePage` module: GET render, POST stream loop, POST events.
+
+  Inside an aliased `scope`, the page module is scope-expanded like a
+  controller or live view.
+
+      dlive "/counter", CounterLive
+
+  expands to:
+
+      GET   /counter                 -> Dstar.LivePage.Plug page
+      POST  /counter                 -> Dstar.LivePage.Plug stream
+      POST  /counter/_event/:event   -> Dstar.LivePage.Plug event (204 or 410)
+  """
+  defmacro dlive(path, page) do
+    quote bind_quoted: [path: path, page: page] do
+      page = Phoenix.Router.scoped_alias(__MODULE__, page)
+      get(path, Dstar.LivePage.Plug, {:live_page, page}, alias: false)
+      post(path, Dstar.LivePage.Plug, {:live_stream, page}, alias: false)
+
+      post(Dstar.Router.__event_path__(path), Dstar.LivePage.Plug, {:live_event, page},
+        alias: false
+      )
     end
   end
 

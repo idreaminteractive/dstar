@@ -80,6 +80,16 @@ Lower-level alternative for a loop that owns its `receive`:
 `Dstar.start_stream/2,3`, check `conn.halted` before subscribing, and call
 `Dstar.Utility.StreamRegistry.release(conn)` in an `after` block.
 
+## Stateful pages (LivePage)
+
+When server state must outlive one request, `use Dstar.LivePage` with
+`dlive/2` splits command from query: the POST stream loop owns assigns,
+event POSTs forward through `Dstar.LiveStore` and answer 204, and
+`handle_info({:store_updated, keys}, conn)` re-renders. `stream_key/1` is
+required; events with no loop for the tab answer halted 410. Ephemeral UI
+(validation errors) may start SSE and patch directly instead of touching
+the store.
+
 ## Client-side Setup
 
 **Initialize stream on mount:**

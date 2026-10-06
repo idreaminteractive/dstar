@@ -146,4 +146,49 @@ defmodule Dstar.RouterTest do
     assert Dstar.Router.__dispatch_path__("/ds") == "/ds/:module/:event"
     assert Dstar.Router.__dispatch_path__("/ds/") == "/ds/:module/:event"
   end
+
+  defmodule CounterLive do
+    use Dstar.LivePage
+
+    @impl true
+    def mount(conn, _params), do: assign(conn, count: 0)
+
+    @impl true
+    def render(assigns) do
+      ~H"""
+      <div data-signals:count={@count}>live counter</div>
+      """
+    end
+
+    @impl true
+    def stream_key(_conn), do: :router_live_scope
+
+    @impl true
+    def handle_connect(conn, _params), do: conn
+  end
+
+  defmodule LiveTestRouter do
+    use Phoenix.Router
+    import Dstar.Router
+
+    dlive("/live", Dstar.RouterTest.CounterLive)
+  end
+
+  defp call_live(conn), do: LiveTestRouter.call(conn, LiveTestRouter.init([]))
+
+  test "dlive GET route renders the live page" do
+    conn = call_live(conn(:get, "/live"))
+    assert conn.status == 200
+    assert conn.resp_body =~ "live counter"
+  end
+
+  test "dlive event route returns 410 with no loop" do
+    conn =
+      conn(:post, "/live/_event/increment")
+      |> Plug.Conn.put_req_header("content-type", "application/json")
+      |> Map.put(:body_params, %{"tabId" => "tab-router-missing"})
+      |> call_live()
+
+    assert conn.status == 410
+  end
 end

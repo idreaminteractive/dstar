@@ -736,6 +736,10 @@ PhoenixDatastar kept state in a GenServer between requests. Dstar is stateless â
 
 If you used `terminate/1` for cleanup in live views, that logic should move to wherever you manage the resource lifecycle (e.g., a supervised process, or database cleanup on session expiry).
 
+### What about stateful live views?
+
+PhoenixDatastar's live view mode kept server state between requests. Dstar covers that with `Dstar.LivePage` + `dlive/2`: the stream loop owns assigns, `handle_event/4` forwards through `Dstar.LiveStore` and answers 204, and `handle_info({:store_updated, keys}, conn)` re-renders. `stream_key/1` is required; events with no loop answer 410.
+
 ### Can I still use HEEx templates?
 
 Yes. Dstar works with standard Phoenix templates. The only difference is you render them in the controller and pass the HTML string to `Dstar.patch_elements/3` instead of returning them from a `render/1` callback.

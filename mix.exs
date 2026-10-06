@@ -58,6 +58,9 @@ defmodule Dstar.MixProject do
       groups_for_modules: [
         Pages: [
           Dstar.Page,
+          Dstar.LivePage,
+          Dstar.LivePage.Plug,
+          Dstar.LiveStore,
           Dstar.Component,
           Dstar.Router,
           Dstar.Page.Plug,

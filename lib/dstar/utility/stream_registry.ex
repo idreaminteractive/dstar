@@ -279,6 +279,25 @@ defmodule Dstar.Utility.StreamRegistry do
     end
   end
 
+  @doc """
+  Sends `message` to the active owner of `key`.
+
+  Returns `:ok` or `{:error, :no_owner}` when no claim is active or the
+  coordinator is not running. Fire-and-forget: delivery is `send/2`,
+  not a call.
+  """
+  @spec forward(key(), term()) :: :ok | {:error, :no_owner}
+  def forward(key, message) do
+    case owner(key) do
+      {:ok, pid, _claim} ->
+        send(pid, message)
+        :ok
+
+      :error ->
+        {:error, :no_owner}
+    end
+  end
+
   @doc false
   def replacement_for?(%Plug.Conn{} = conn, {:EXIT, _pid, {:replaced, claim}}) do
     match?(%{claim: ^claim}, conn.private[@claim_private])

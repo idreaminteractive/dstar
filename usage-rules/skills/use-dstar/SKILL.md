@@ -130,6 +130,35 @@ defp stream_loop(conn) do
 end
 ```
 
+### Stateful Page (LivePage, CQS)
+
+```elixir
+defmodule MyAppWeb.CounterLive do
+  use Dstar.LivePage
+
+  def mount(conn, _params), do: assign(conn, count: 0)
+  def render(assigns), do: ~H"""
+  <div data-signals:count={@count} data-init={connect()}></div>
+  """
+
+  def stream_key(conn), do: {:counter, conn.assigns.current_user.id}
+  def handle_connect(conn, _params), do: assign(conn, count: 0)
+
+  def handle_event(conn, "increment", _signals, store) do
+    Dstar.LiveStore.update(store, :count, &((&1 || 0) + 1))
+    conn
+  end
+
+  def handle_info({:store_updated, _keys}, conn) do
+    patch_signals(conn, Map.take(conn.assigns, [:count]))
+  end
+end
+```
+
+Wire with `dlive "/counter", MyAppWeb.CounterLive`. Events answer 204 (or
+410 with no loop); ephemeral validation errors may start SSE and patch
+directly without touching the store.
+
 ## Template Patterns
 
 ### Signal Value Quoting

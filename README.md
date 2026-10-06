@@ -163,6 +163,43 @@ end
 This matters on HTTP/1.1 keep-alive, where the connection process outlives
 the stream and goes on to serve unrelated requests.
 
+### Stateful pages (LivePage)
+
+`Dstar.Page` events are stateless: each POST renders its own patches. When
+server state must outlive one request, use `Dstar.LivePage` + `dlive/2` —
+the same shape, CQS split. The stream loop owns assigns; events forward to
+it and answer 204; the loop re-renders:
+
+```elixir
+defmodule MyAppWeb.CounterLive do
+  use Dstar.LivePage
+
+  def mount(conn, _params), do: assign(conn, count: 0)
+  def render(assigns), do: ~H"""
+  <div data-signals:count={@count} data-init={connect()}></div>
+  """
+
+  def stream_key(conn), do: {:counter, conn.assigns.current_user.id}
+  def handle_connect(conn, _params), do: assign(conn, count: 0)
+
+  def handle_event(conn, "increment", _signals, store) do
+    Dstar.LiveStore.update(store, :count, &((&1 || 0) + 1))
+    conn # untouched -> 204; the loop renders
+  end
+
+  def handle_info({:store_updated, _keys}, conn) do
+    patch_signals(conn, Map.take(conn.assigns, [:count]))
+  end
+end
+```
+
+Rules: `stream_key/1` is required (events route via `{key, tabId}`). No loop
+for the tab answers halted 410 — the client reconnects the stream. A
+handler may instead start SSE and patch directly for ephemeral UI that must
+not touch the store (validation errors). `Dstar.LiveStore` holds no process;
+state lives in the loop's assigns, with ETS/DB adapters behind the same
+functions later.
+
 ### Authorization
 
 `dstar/2` exposes three independent routes. Put session-wide
@@ -803,9 +840,12 @@ The `Dstar` module delegates to these. Use them directly when you need more cont
 | Module | Functions |
 |--------|-----------|
 | `Dstar.Page` | behaviour + `use` macro: `mount/2`, `authorize/2`, `render/1`, `handle_event/3`, `handle_connect/2`, `handle_info/2`, `stream_key/1`, `handle_disconnect/1` |
+| `Dstar.LivePage` | stateful CQS behaviour + `use` macro: `mount/2`, `authorize/2`, `render/1`, `handle_event/4`, `handle_connect/2`, `handle_info/2`, required `stream_key/1`, `handle_disconnect/1` |
+| `Dstar.LiveStore` | CQS store ref: `new/2`, `assign/2`, `update/3` route to the loop; `apply_message/2` is the loop side |
+| `Dstar.LivePage.Plug` | live request driver: live page, event (204/410), and stream actions |
 | `Dstar.Page.Plug` | request driver: handles page, event, and stream actions |
 | `Dstar.Component` | shared UI with colocated event handlers |
-| `Dstar.Router` | `dstar/2` (page routes), `dstar_components/2` (dispatch route) |
+| `Dstar.Router` | `dstar/2` (page routes), `dlive/2` (live page routes), `dstar_components/2` (dispatch route) |
 | `Dstar.Test` | `sse_events/1`, `patched_signals/1`, `assert_patched_signals/2`, `assert_patched_element/2` |
 | `Dstar.Stream` | `open/1,2`, `run/1,2` — long-lived SSE stream with an owned receive loop, optional per-tab `key:` |
 | `Dstar.SSE` | `start/1`, `check_connection/1`, `send_event/3,4`, `send_event!/3,4`, `format_event/2,3` |

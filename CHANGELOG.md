@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- **`Dstar.LivePage` — stateful CQS pages.** `use Dstar.LivePage` + `dlive/2`
+  routes a page whose stream loop owns assigns: `mount/2` renders once,
+  `handle_connect/2` seeds loop state, `handle_event/4` forwards to the loop
+  through `Dstar.LiveStore` and answers 204 (or a short SSE patch for
+  ephemeral validation errors), and `handle_info({:store_updated, keys}, conn)`
+  re-renders. `stream_key/1` is required so events can route to the loop;
+  events with no loop answer 410. `Dstar.Utility.StreamRegistry.forward/2`
+  sends to a key's active owner.
+
 ## 0.3.1 — 2026-10-04
 
 ### Changed

@@ -125,7 +125,7 @@ into the event name is not an authorization check.
 
 Dstar is a **minimalist SSE library** providing pure functions over `Plug.Conn` to format and send Server-Sent Events for Datastar client-side framework.
 
-**Not:** LiveView, PhoenixDatastar, a framework, or a state management system. The **functional core** has no processes, GenServers, supervision trees, behaviours, or macros — two deps: `plug` and `jason`. The page layer (`Dstar.Page`, `Dstar.Component`, `Dstar.Router`) adds one behaviour, one plug, and two router macros on top, and is entirely opt-in.
+**Not:** LiveView, PhoenixDatastar, a framework, or a state management system. The **functional core** has no processes, GenServers, supervision trees, behaviours, or macros — two deps: `plug` and `jason`. The page layer (`Dstar.Page`, `Dstar.LivePage`, `Dstar.Component`, `Dstar.Router`) adds behaviours, plugs, and router macros on top, and is entirely opt-in.
 
 ## Core Pattern
 
@@ -300,8 +300,35 @@ Client reconnection:
      data-on:online__window="@post('/stream', {retryMaxCount: Infinity})">
 ```
 
-## Live Collections
+## Stateful pages (LivePage)
 
+`Dstar.Page` events are stateless — each POST renders its own patches. When
+server state must outlive one request, use `use Dstar.LivePage` +
+`dlive/2`. Same `mount`/`render` shape, CQS split: the stream loop owns
+assigns via `Dstar.LiveStore`, `handle_event/4` forwards and answers 204,
+`handle_info({:store_updated, keys}, conn)` re-renders.
+
+```elixir
+def stream_key(conn), do: {:counter, conn.assigns.current_user.id}
+def handle_connect(conn, _params), do: assign(conn, count: 0)
+
+def handle_event(conn, "increment", _signals, store) do
+  Dstar.LiveStore.update(store, :count, &((&1 || 0) + 1))
+  conn
+end
+
+def handle_info({:store_updated, _keys}, conn) do
+  patch_signals(conn, Map.take(conn.assigns, [:count]))
+end
+```
+
+Rules: `stream_key/1` is required — events route through `{key, tabId}` and
+a tab with no loop gets halted 410 (client reconnects the stream). Return
+the conn untouched for 204; start SSE and patch directly only for ephemeral
+UI that must not touch the store (validation errors). The store holds no
+process — state lives in the loop's assigns.
+
+## Live Collections
 Keeping a list current in every open tab? The stream is one-way and cannot
 learn a tab's filter/sort/page after connect, so blindly appending or morphing
 rows silently corrupts any non-plain view. **Default to the nudge:**
